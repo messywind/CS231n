@@ -34,7 +34,41 @@ def softmax_loss_naive(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # 获取样本数量和类别数量
+    num_train = X.shape[0]
+    num_classes = W.shape[1]
+    
+    # 遍历每个样本
+    for i in range(num_train):
+        # 计算得分
+        scores = X[i].dot(W)
+        
+        # 数值稳定性处理
+        scores -= np.max(scores)
+        
+        # 计算softmax概率
+        exp_scores = np.exp(scores)
+        probs = exp_scores / np.sum(exp_scores)
+        
+        # 计算损失
+        loss += -np.log(probs[y[i]])
+        
+        # 计算梯度
+        for j in range(num_classes):
+            if j == y[i]:
+                dW[:, j] += (probs[j] - 1) * X[i]
+            else:
+                dW[:, j] += probs[j] * X[i]
+    
+    # 平均损失
+    loss /= num_train
+    # 加上正则化损失
+    loss += 0.5 * reg * np.sum(W * W)
+    
+    # 平均梯度
+    dW /= num_train
+    # 加上正则化梯度
+    dW += reg * W
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -59,7 +93,29 @@ def softmax_loss_vectorized(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # 获取样本数量
+    num_train = X.shape[0]
+
+    # 计算得分矩阵
+    scores = X.dot(W)
+    
+    # 数值稳定性处理
+    scores -= np.max(scores, axis=1, keepdims=True)
+    
+    # 计算softmax概率
+    exp_scores = np.exp(scores)
+    probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+    
+    # 计算损失
+    correct_log_probs = -np.log(probs[np.arange(num_train), y])
+    loss = np.sum(correct_log_probs) / num_train
+    loss += 0.5 * reg * np.sum(W * W)
+    
+    # 计算梯度
+    dscores = probs
+    dscores[np.arange(num_train), y] -= 1
+    dW = X.T.dot(dscores) / num_train
+    dW += reg * W
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
