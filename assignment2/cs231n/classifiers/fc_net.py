@@ -103,10 +103,8 @@ class FullyConnectedNet(object):
             self.params['b' + str(i + 1)] = np.zeros(dims[i + 1])
             
             # 如果使用批归一化且不是最后一层，最后一层不需要正则化参数
-            if self.normalization and i < self.num_layers - 1:
-                # gamma初始化为1
+            if self.normalization == 'batchnorm' and i < self.num_layers - 1:
                 self.params['gamma' + str(i + 1)] = np.ones(dims[i + 1])
-                # beta初始化为0 
                 self.params['beta' + str(i + 1)] = np.zeros(dims[i + 1])
 
 
@@ -181,33 +179,30 @@ class FullyConnectedNet(object):
         # layer, etc.                                                              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-        
+
+        # 我们网络的结果是这样的 {affine - [batch/layer norm] - relu - [dropout]} x (L - 1) - affine - softmax
+
         # 用一个变量保存上一层的输出
         layer_input = X
         caches = {}
-        # 对前面 L - 1 层进行操作，因为最后一层的操作和前面的不一样
+        # 对前面 L - 1层进行操作，因为最后一层的操作和前面的不一样
         for i in range(1, self.num_layers):
             W = self.params['W' + str(i)]
             b = self.params['b' + str(i)]
+            if self.normalization == 'batchnorm':
+                gamma = self.params['gamma' + str(i)]
+                beta = self.params['beta' + str(i)]
+                layer_input, caches['layer' + str(i)] = affine_bn_relu_forward(layer_input, W, b, gamma, beta, self.bn_params[i - 1])
+            else:
+                layer_input, caches['layer' + str(i)] = affine_relu_forward(layer_input, W, b)
 
-            # 计算affine层的输出
-            affine_out, affine_cache = affine_forward(layer_input, W, b)
-            # 计算relu层的输出
-            relu_out, relu_cache = relu_forward(affine_out)
-
-            # 保存cache
-            caches['affine_cache' + str(i)] = affine_cache
-            caches['relu_cache' + str(i)] = relu_cache
-
-            # 更新layer_input
-            layer_input = relu_out
 
         # 最后一层的操作
         W = self.params['W' + str(self.num_layers)]
         b = self.params['b' + str(self.num_layers)]
 
         scores, affine_cache = affine_forward(layer_input, W, b)
-        caches['affine_cache' + str(self.num_layers)] = affine_cache
+        caches['layer' + str(self.num_layers)] = affine_cache
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -238,27 +233,20 @@ class FullyConnectedNet(object):
         loss, dscores = softmax_loss(scores, y)
 
         # 先计算最后一层的梯度
-        W = self.params['W' + str(self.num_layers)]
-        affine_cache = caches['affine_cache' + str(self.num_layers)]
-        d_relu_out, dW, db = affine_backward(dscores, affine_cache)
-        grads['W' + str(self.num_layers)] = dW + self.reg * W
+        dx, dw, db = affine_backward(dscores, caches['layer' + str(self.num_layers)])
+        grads['W' + str(self.num_layers)] = dw + self.reg * self.params['W' + str(self.num_layers)]
         grads['b' + str(self.num_layers)] = db
 
-        # 计算前面的梯度
         for i in range(self.num_layers - 1, 0, -1):
-            W = self.params['W' + str(i)]
-            affine_cache = caches['affine_cache' + str(i)]
-            relu_cache = caches['relu_cache' + str(i)]
-
-            # 先计算relu层的梯度
-            d_affine_out = relu_backward(d_relu_out, relu_cache)
-            # 再计算affine层的梯度
-            d_relu_out, dW, db = affine_backward(d_affine_out, affine_cache)
-
-            # 保存梯度
-            grads['W' + str(i)] = dW + self.reg * W
+            if self.normalization == 'batchnorm':
+                dx, dw, db, dgamma, dbeta = affine_bn_relu_backward(dx, caches['layer' + str(i)])
+                grads['gamma' + str(i)] = dgamma
+                grads['beta' + str(i)] = dbeta
+            else:
+                dx, dw, db = affine_relu_backward(dx, caches['layer' + str(i)])
+            grads['W' + str(i)] = dw + self.reg * self.params['W' + str(i)]
             grads['b' + str(i)] = db
-         
+
         # 加上正则化项
         for i in range(1, self.num_layers + 1):
             W = self.params['W' + str(i)]
