@@ -195,7 +195,8 @@ class FullyConnectedNet(object):
                 layer_input, caches['layer' + str(i)] = affine_bn_relu_forward(layer_input, W, b, gamma, beta, self.bn_params[i - 1])
             else:
                 layer_input, caches['layer' + str(i)] = affine_relu_forward(layer_input, W, b)
-
+            if self.use_dropout:  # 如果使用dropout
+                layer_input, caches['dropout' + str(i)] = dropout_forward(layer_input, self.dropout_param)
 
         # 最后一层的操作
         W = self.params['W' + str(self.num_layers)]
@@ -238,6 +239,8 @@ class FullyConnectedNet(object):
         grads['b' + str(self.num_layers)] = db
 
         for i in range(self.num_layers - 1, 0, -1):
+            if self.use_dropout:  # dropout层的梯度
+                dx = dropout_backward(dx, caches['dropout' + str(i)])
             if self.normalization == 'batchnorm':
                 dx, dw, db, dgamma, dbeta = affine_bn_relu_backward(dx, caches['layer' + str(i)])
                 grads['gamma' + str(i)] = dgamma
