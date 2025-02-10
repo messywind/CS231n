@@ -63,7 +63,20 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # conv - relu - 2x2 max pool - affine - relu - affine - softmax
+        C, H, W = input_dim  # 获取输入数据的通道数，高度，宽度
+
+        # 卷积层
+        self.params["W1"] = np.random.normal(0, weight_scale, (num_filters, C, filter_size, filter_size))
+        self.params["b1"] = np.zeros(num_filters)
+
+        # 全连接层
+        self.params["W2"] = np.random.normal(0, weight_scale, (num_filters * H * W // 4, hidden_dim))
+        self.params["b2"] = np.zeros(hidden_dim)
+
+        # 全连接层
+        self.params["W3"] = np.random.normal(0, weight_scale, (hidden_dim, num_classes))
+        self.params["b3"] = np.zeros(num_classes)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -102,7 +115,10 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # conv - relu - 2x2 max pool - affine - relu - affine - softmax
+        out1, cache1 = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)  # 卷积层
+        out2, cache2 = affine_relu_forward(out1, W2, b2)  # 全连接层
+        scores, cache3 = affine_forward(out2, W3, b3)  # 全连接层
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -125,7 +141,19 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # 计算损失
+        loss, dout = softmax_loss(scores, y)
+        loss += 0.5 * self.reg * (np.sum(W1 ** 2) + np.sum(W2 ** 2) + np.sum(W3 ** 2))  # L2正则化
+
+        # 计算梯度
+        dout, grads["W3"], grads["b3"] = affine_backward(dout, cache3)  # 全连接层
+        dout, grads["W2"], grads["b2"] = affine_relu_backward(dout, cache2)  # 全连接层
+        dout, grads["W1"], grads["b1"] = conv_relu_pool_backward(dout, cache1)  # 卷积层
+
+        # 加上正则化项的梯度
+        grads["W3"] += self.reg * W3
+        grads["W2"] += self.reg * W2
+        grads["W1"] += self.reg * W1
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
