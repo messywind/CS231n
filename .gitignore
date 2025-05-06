@@ -3,4 +3,5 @@ assignment1/cs231n/datasets/imagenet_val_25.npz
 assignment2/cs231n/datasets/cifar-10-batches-py/
 assignment2/cs231n/datasets/imagenet_val_25.npz
 assignment2/cs231n/datasets/imagenet_val_25.npz.1
+assignment3/cs231n/datasets/coco_captioning
 **/__pycache__/
