@@ -169,20 +169,49 @@ class MultiHeadAttention(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        H, E_H = self.n_head, self.head_dim
+        # 1. 线性变换，得到 Q, K, V
+        # 形状：(N, S, E) / (N, T, E) -> (N, S, E) / (N, T, E)
+        Q = self.query(query)   # (N, S, E)
+        K = self.key(key)       # (N, T, E)
+        V = self.value(value)   # (N, T, E)
 
-        Q = self.query(query).view(N, S, H, E_H).permute(0, 2, 1, 3)
-        K = self.key(key).view(N, T, H, E_H).permute(0, 2, 3, 1)
-        V = self.value(value).view(N, T, H, E_H).permute(0, 2, 1, 3)
+        # 2. 拆分多头 (N, S, E) -> (N, n_head, S, head_dim)
+        def split_heads(x):
+            N, L, E = x.shape
+            return x.view(N, L, self.n_head, self.head_dim).transpose(1, 2)
+            # (N, L, n_head, head_dim) -> (N, n_head, L, head_dim)
 
-        attn = torch.matmul(Q, K) / math.sqrt(E_H)
+        Q = split_heads(Q)  # (N, n_head, S, head_dim)
+        K = split_heads(K)  # (N, n_head, T, head_dim)
+        V = split_heads(V)  # (N, n_head, T, head_dim)
+
+        # 3. 计算注意力分数 (Q @ K^T / sqrt(d_k))
+        # Q: (N, n_head, S, head_dim)
+        # K: (N, n_head, T, head_dim)
+        # K.transpose(-2, -1): (N, n_head, head_dim, T)
+        attn_scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.head_dim ** 0.5)  # (N, n_head, S, T)
+
+        # 4. 应用掩码（mask），防止某些位置被关注 
         if attn_mask is not None:
-            attn = attn.masked_fill(attn_mask == 0, float('-inf'))
-        attn = F.softmax(attn, dim=-1)
-        attn = self.attn_drop(attn)
+            # attn_mask: (S, T) -> (1, 1, S, T) 方便广播
+            attn_scores = attn_scores.masked_fill(attn_mask.unsqueeze(0).unsqueeze(0) == 0, float('-inf'))
 
-        output = torch.matmul(attn, V).permute(0, 2, 1, 3).contiguous().view(N, S, E)
-        output = self.proj(output)
+        # 5. softmax 得到注意力权重
+        attn_weights = torch.softmax(attn_scores, dim=-1)  # (N, n_head, S, T)
+
+        # 6. dropout
+        attn_weights = self.attn_drop(attn_weights)
+
+        # 7. 加权求和得到每个头的输出
+        # attn_weights: (N, n_head, S, T)
+        # V: (N, n_head, T, head_dim)
+        attn_output = torch.matmul(attn_weights, V)  # (N, n_head, S, head_dim)
+
+        # 8. 合并多头 (N, n_head, S, head_dim) -> (N, S, n_head, head_dim) -> (N, S, E)
+        attn_output = attn_output.transpose(1, 2).contiguous().view(N, S, E)
+
+        # 9. 输出投影
+        output = self.proj(attn_output)  # (N, S, E)
         
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
