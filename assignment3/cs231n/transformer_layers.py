@@ -38,10 +38,11 @@ class PositionalEncoding(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        div_term = torch.arange(0, embed_dim, 2).float() * -(math.log(10000.0) / embed_dim)
-        positions = torch.arange(0, max_len).float().unsqueeze(1)
-        pe[0, :, 0::2] = torch.sin(positions * torch.exp(div_term))
-        pe[0, :, 1::2] = torch.cos(positions * torch.exp(div_term))
+        # 构造位置编码
+        position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)  # (max_len, 1)
+        div_term = torch.exp(torch.arange(0, embed_dim, 2, dtype=torch.float32) * (-math.log(10000.0) / embed_dim))  # (embed_dim/2,)
+        pe[0, :, 0::2] = torch.sin(position * div_term)  # 偶数列
+        pe[0, :, 1::2] = torch.cos(position * div_term)  # 奇数列
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -73,7 +74,8 @@ class PositionalEncoding(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        output = x + self.pe[:, :S, :].to(x.device)
+        # 加上位置编码并dropout
+        output = x + self.pe[:, :S, :]
         output = self.dropout(output)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

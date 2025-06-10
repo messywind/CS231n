@@ -90,13 +90,32 @@ class CaptioningTransformer(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        captions_embedded = self.embedding(captions) # (N, T, W)
-        captions_embedded = self.positional_encoding(captions_embedded) # (N, T, W)
-        features_embedded = self.visual_projection(features) # (N, W)
-        features_embedded = features_embedded.unsqueeze(1) # (N, 1, W)
-        tgt_mask = torch.tril(torch.ones(T, T)).bool()
-        scores = self.transformer(captions_embedded, features_embedded, tgt_mask)
-        scores = self.output(scores)
+        # 1. 对 captions 做词嵌入并加上位置编码
+        # (N, T) -> (N, T, W)
+        caption_embed = self.embedding(captions)
+        caption_embed = self.positional_encoding(caption_embed)
+
+        # 2. 将图像特征投影到词向量空间
+        # (N, D) -> (N, W)
+        img_embed = self.visual_projection(features)
+        # (N, W) -> (N, 1, W)
+        img_embed = img_embed.unsqueeze(1)
+
+        # 3. 拼接图像特征和文本嵌入，作为 decoder 的输入
+        # 图像特征作为序列第一个 token，后接 captions 的前 T-1 个 token
+        decoder_input = torch.cat([img_embed, caption_embed[:, :-1, :]], dim=1)  # (N, T, W)
+
+        # 4. 构造下三角 mask，防止看到未来的信息
+        # mask 形状为 (T, T)
+        T = captions.shape[1]
+        tgt_mask = torch.tril(torch.ones((T, T), device=captions.device)).bool()
+
+        # 5. 通过 transformer decoder 得到输出特征
+        # memory 是图像特征 (N, 1, W)
+        decoder_output = self.transformer(decoder_input, memory=img_embed, tgt_mask=tgt_mask)  # (N, T, W)
+
+        # 6. 投影到词表空间，得到每个时间步每个词的分数
+        scores = self.output(decoder_output)  # (N, T, V)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
